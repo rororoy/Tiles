@@ -63,7 +63,7 @@ class TilesProblem:
         ], dtype=np.uint8)
         
         # Define possible actions (directions the empty tile can move)
-        self.actions = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+        self.actions = ['LEFT', 'RIGHT', 'UP', 'DOWN']
         
         # Action to direction mapping
         self.action_directions = {
@@ -227,4 +227,68 @@ class Heuristic:
         return distance
 
     def heuristic_linear_conflicts(self, state: np.ndarray) -> int:
+    """
+    Count linear conflicts: pairs of tiles in the same row/column that are
+    in their goal row/column but in reversed relative order.
+    """
+    conflicts = 0
+    
+    # ROW conflicts
+    for row in range(3):
+        row_tiles = []  # Store (tile_value, current_col, goal_col)
         
+        for col in range(3):
+            tile = state[row, col]
+            if tile != 0:
+                # Find where this tile should be in the goal
+                goal_pos = np.where(self.target_state == tile)
+                goal_row = goal_pos[0][0]
+                goal_col = goal_pos[1][0]
+                
+                # Only consider tiles that belong to this row in the goal
+                if goal_row == row:
+                    row_tiles.append((tile, col, goal_col))
+        
+        # Check all pairs for conflicts
+        for i in range(len(row_tiles)):
+            for j in range(i + 1, len(row_tiles)):
+                tile_i, col_i, goal_col_i = row_tiles[i]
+                tile_j, col_j, goal_col_j = row_tiles[j]
+                
+                # Conflict: i is LEFT of j, but i should be RIGHT of j
+                if col_i < col_j and goal_col_i > goal_col_j:
+                    conflicts += 1
+    
+    # COLUMN conflicts
+    for col in range(3):
+        col_tiles = []  # Store (tile_value, current_row, goal_row)
+        
+        for row in range(3):
+            tile = state[row, col]
+            if tile != 0:
+                goal_pos = np.where(self.target_state == tile)
+                goal_row = goal_pos[0][0]
+                goal_col = goal_pos[1][0]
+                
+                # Only consider tiles that belong to this column in the goal
+                if goal_col == col:
+                    col_tiles.append((tile, row, goal_row))
+        
+        # Check all pairs for conflicts
+        for i in range(len(col_tiles)):
+            for j in range(i + 1, len(col_tiles)):
+                tile_i, row_i, goal_row_i = col_tiles[i]
+                tile_j, row_j, goal_row_j = col_tiles[j]
+                
+                # Conflict: i is ABOVE j, but i should be BELOW j
+                if row_i < row_j and goal_row_i > goal_row_j:
+                    conflicts += 1
+    
+    return conflicts
+
+    def heuristic(self, state: np.ndarray) -> int:
+        """
+        The full heuristic implementation for the problem: 
+        h(n) = Manhattan Distance + 2 × Linear Conflicts
+        """
+        return self.heuristic_manhatten_distance(state) + (2 * self.heuristic_linear_conflicts(state))
