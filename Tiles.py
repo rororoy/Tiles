@@ -37,6 +37,7 @@ from typing import List, Tuple, Optional, Set
 from collections import deque
 import heapq
 from collections import deque
+import heapq
 
 class TilesProblem:
     """
@@ -72,10 +73,10 @@ class TilesProblem:
         
         # Action to direction mapping
         self.action_directions = {
-            'UP': (-1, 0),
-            'DOWN': (1, 0),
             'LEFT': (0, -1),
-            'RIGHT': (0, 1)
+            'RIGHT': (0, 1),
+            'UP': (-1, 0),
+            'DOWN': (1, 0)
         }
     
     def get_empty_position(self, state: np.ndarray) -> Tuple[int, int]:
@@ -235,7 +236,6 @@ class TilesProblem:
         return int(state[tile_row, tile_col])
 
 
-
 class Heuristic:
     """Represents the heuristic function for the Tiles puzzle problem."""
     
@@ -331,6 +331,7 @@ class Heuristic:
         """
         return self.heuristic_manhatten_distance(state) + (2 * self.heuristic_linear_conflicts(state))
 
+
 class SearchAlgorithms:
     def __init__(self, problem: TilesProblem):
         """
@@ -343,41 +344,121 @@ class SearchAlgorithms:
         self.heuristic = Heuristic(problem)
     
     def bfs(self):
-        # Initialize BFS frontier with tuples: (state, path, cost)
-        initial_state = self.problem.initial_state
-        frontier = deque([(initial_state, [], 0)])
+        """
+        Breadth-First Search algorithm for solving the 8-puzzle problem.
         
-        # Track visited states using their string keys for efficiency
+        This implementation uses a FIFO queue (deque) to explore states level by level,
+        ensuring the shortest path solution is found. Nodes are counted as "expanded"
+        when they are removed from the frontier (data structure), not when inserted.
+        
+        Input:
+            - Uses self.problem.initial_state as the starting state
+            - No additional parameters required
+            
+        Output:
+            Returns a tuple of (path, path_length, expanded_nodes):
+            - path: List of tile numbers that move in sequence to solve the puzzle
+                   (e.g., [2, 8, 5, 3, 6, 7, 8, 5, 4, 1])
+            - path_length: Integer representing the number of moves in the solution
+            - expanded_nodes: Integer representing the number of nodes expanded during search
+                             (nodes removed from frontier and processed)
+        
+        Time Complexity: O(b^d) where b is branching factor, d is solution depth
+        Space Complexity: O(b^d) for storing all nodes at the deepest level
+        """
+        initial_state = self.problem.initial_state
+        
+        # Check if initial state is already the goal (redundant since the program doesn't accept a solved board as input)
+        if self.problem.is_goal_state(initial_state):
+            return [], 0, 0
+        
+        frontier = deque([(initial_state, [], 0)])
         reached = {self.problem.state_to_string(initial_state)}
-
         expanded = 0
         
-        # Start BFS loop
         while frontier:
             current, path, cost = frontier.popleft()
-
-            if self.problem.is_goal_state(current):
-                return path, len(path), expanded
             
+            # Count this node as expanded
             expanded += 1
-
-            # Explore neighbors
+            
+            # Generate children
             for action in self.problem.get_possible_actions(current):
                 child_state = self.problem.apply_action(current, action)
+                
+                # Early goal test
+                if self.problem.is_goal_state(child_state):
+                    moved_tile = self.problem.get_moved_tile(current, action)
+                    final_path = path + [moved_tile]
+                    return final_path, len(final_path), expanded
+                
+                # Not goal - add to frontier if not visited
                 child_key = self.problem.state_to_string(child_state)
-
                 if child_key not in reached:
                     reached.add(child_key)
-
-                    # Record the moved tile for path tracking
                     moved_tile = self.problem.get_moved_tile(current, action)
                     frontier.append((
-                        child_state, 
+                        child_state,
                         path + [moved_tile],
-                        cost + self.problem.cost()
+                        cost + 1
                     ))
-
+        
+        # No solution found
         return None, 0, expanded
+
+    def a_star(self): 
+        initial_state = self.problem.initial_state
+        
+        # Check if initial state is already the goal (redundant since the program doesn't accept a solved board as input)
+        if self.problem.is_goal_state(initial_state):
+            return [], 0, 0
+        
+        # Initializing
+        frontier = []
+
+        h_initial = self.heuristic.heuristic(initial_state)
+        heapq.heappush(frontier, (h_initial, 0, initial_state, [])) # Store: (f(n), g(n)=0 (cost), the state, path)
+
+        reached = {self.problem.state_to_string(initial_state): 0}  # state_key: g_cost
+
+        expanded = 0
+
+        while frontier:
+            f_score, g_cost, current, path = heapq.heappop(frontier)
+
+            expanded += 1
+
+            # Generate children
+            for action in self.problem.get_possible_actions(current):
+                child_state = self.problem.apply_action(current, action)
+                moved_tile = self.problem.get_moved_tile(current, action)
+
+                g_child = g_cost + self.problem.cost()
+                
+                # Early goal test
+                if self.problem.is_goal_state(child_state):
+                    final_path = path + [moved_tile]
+                    return final_path, len(final_path), expanded
+                
+                child_key = self.problem.state_to_string(child_state)
+
+                # Add if not visited, or if we found a better path
+                if child_key not in reached or g_child < reached[child_key]:
+                    # Updated the child in reached since we found a better path
+                    reached[child_key] = g_child
+
+                    # Calculate f(n) = g(n) + h(n)
+                    h_child = self.heuristic.heuristic(child_state)
+                    f_child = g_child + h_child
+
+                    heapq.heappush(
+                        frontier,
+                        (f_child, g_child, child_state, path + [moved_tile])
+                    )
+
+        # No solution found
+        return None, 0, expanded
+
 
             
 
@@ -429,10 +510,21 @@ def main():
 
 
     algorithm = SearchAlgorithms(problem)
-    path, path_length, expanded_nodes = algorithm.bfs()
 
-    print("")
+    # Running BFS
+    path, path_length, expanded_nodes = algorithm.bfs()
     print("Algorithm: BFS")
+    if path is None:
+        print("No solution")
+        print("Expanded: " + str(expanded_nodes))
+        return
+    print("Path: " + ' '.join(map(str, path)))
+    print("Length: " + str(path_length))
+    print("Expanded:" + str(expanded_nodes) + "\n")
+
+    # Running A*
+    path, path_length, expanded_nodes = algorithm.a_star()
+    print("Algorithm: A*")
     if path is None:
         print("No solution")
         print("Expanded: " + str(expanded_nodes))
