@@ -53,8 +53,7 @@ class TilesProblem:
         """
         Initialize the Tiles problem with the given initial state.
         
-        Args:
-            initial_state: A list of 9 integers representing the initial board state
+        Input: initial_state: A list of 9 integers representing the initial board state
                           where 0 represents the empty tile
         """
         # Convert initial state to numpy array with dtype uint8 for efficient storage
@@ -187,8 +186,10 @@ class TilesProblem:
         """
         return np.array(list(map(int, state_str)), dtype=np.uint8).reshape(3, 3)
     
-    def cost(self) -> int:
-        """Cost of any action in this problem (always 1)."""
+    def cost(self, action: str) -> int:
+        """Cost of a specific action in this problem."""
+        # You can modify this function to return different costs based on the action
+        # For now, returning 1 for all actions, but this can be customized
         return 1
     
     def print_state(self, state: np.ndarray):
@@ -337,8 +338,7 @@ class SearchAlgorithms:
         """
         Initialize the SearchAlgorithms class with a TilesProblem instance.
         
-        Args:
-            problem: TilesProblem instance containing the puzzle state and methods
+        INPUT: problem - TilesProblem instance containing the puzzle state and methods
         """
         self.problem = problem
         self.heuristic = Heuristic(problem)
@@ -400,7 +400,7 @@ class SearchAlgorithms:
                     frontier.append((
                         child_state,
                         path + [moved_tile],
-                        cost + 1
+                        cost + self.problem.cost(action)
                     ))
         
         # No solution found
@@ -417,14 +417,15 @@ class SearchAlgorithms:
         frontier = []
 
         h_initial = self.heuristic.heuristic(initial_state)
-        heapq.heappush(frontier, (h_initial, 0, initial_state, [])) # Store: (f(n), g(n)=0 (cost), the state, path)
+        heapq.heappush(frontier, (h_initial, 0, self.problem.state_to_string(initial_state), [])) # Store: (f(n), g(n)=0 (cost), state_string, path)
 
         reached = {self.problem.state_to_string(initial_state): 0}  # state_key: g_cost
 
         expanded = 0
 
         while frontier:
-            f_score, g_cost, current, path = heapq.heappop(frontier)
+            f_score, g_cost, current_str, path = heapq.heappop(frontier)
+            current = self.problem.string_to_state(current_str)
 
             expanded += 1
 
@@ -433,7 +434,7 @@ class SearchAlgorithms:
                 child_state = self.problem.apply_action(current, action)
                 moved_tile = self.problem.get_moved_tile(current, action)
 
-                g_child = g_cost + self.problem.cost()
+                g_child = g_cost + self.problem.cost(action)
                 
                 # Early goal test
                 if self.problem.is_goal_state(child_state):
@@ -453,7 +454,7 @@ class SearchAlgorithms:
 
                     heapq.heappush(
                         frontier,
-                        (f_child, g_child, child_state, path + [moved_tile])
+                        (f_child, g_child, self.problem.state_to_string(child_state), path + [moved_tile])
                     )
 
         # No solution found
